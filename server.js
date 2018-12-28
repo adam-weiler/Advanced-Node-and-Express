@@ -1,22 +1,15 @@
 'use strict';
 
-const express = require('express');
-const bodyParser = require('body-parser');
-
-//#3 Set up Passport:
-const session = require('express-session');
-const passport = require('passport');
-
-//#6 Authentication Strategies:
-const LocalStrategy = require('passport-local');
+const express       = require('express');
+const bodyParser    = require('body-parser');
+const fccTesting    = require('./freeCodeCamp/fcctesting.js');
 
 //#5 Implement the Serialization of a Passport User:
-const mongo = require('mongodb').MongoClient;
+const mongo         = require('mongodb').MongoClient;
 
-//#4 Serialization of a User Object:
-const ObjectID = require('mongodb').ObjectID;
-
-const fccTesting = require('./freeCodeCamp/fcctesting.js');
+//#13: Clean up your Project with Modules:
+const routes = require('./routes.js');
+const auth = require('./auth.js');
 
 const app = express();
 
@@ -28,17 +21,6 @@ app.use(bodyParser.urlencoded({
 	extended: true
 }));
 
-//#3 Set up Passport:
-app.use(session({
-	secret: process.env.SESSION_SECRET,
-	resave: true,
-	saveUninitialized: true,
-}));
-
-//#3 Set up Passport:
-app.use(passport.initialize());
-app.use(passport.session());
-
 //#1 Set up a Template Engine:
 app.set('view engine', 'pug')
 
@@ -49,72 +31,9 @@ mongo.connect(process.env.DATABASE, (err, db) => {
 	} else {
 		console.log('Successful database connection');
 
-		//#6 Authentication Strategies:
-		passport.use(new LocalStrategy(
-			function(username, password, done) {
-				db.collection('users').findOne({
-					username: username
-				}, function(err, user) {
-					console.log('User ' + username + ' attempted to log in.');
-					if (err) {
-						return done(err);
-					}
-					if (!user) {
-						return done(null, false);
-					}
-					if (password !== user.password) {
-						return done(null, false);
-					}
-					return done(null, user);
-				});
-			}
-		));
-
-		//#4 Serialization of a User Object:
-		passport.serializeUser((user, done) => {
-			done(null, user._id);
-		});
-
-		//#4 Serialization of a User Object:
-		passport.deserializeUser((id, done) => {
-			db.collection('users').findOne({
-					_id: new ObjectID(id)
-				},
-				(err, doc) => {
-					done(null, doc);
-				}
-			);
-		});
-
-		//#8: Create New Middleware:
-		function ensureAuthenticated(req, res, next) {
-			if (req.isAuthenticated()) {
-				return next();
-			}
-			res.redirect('/');
-		};
-
-		app.route('/')
-			.get((req, res) => {
-				res.render(process.cwd() + '/views/pug/index', {
-					title: 'Home Page',
-					message: 'Please login',
-					showLogin: true
-				}); //#1 Set up a Template Engine, #2 Use a Template Engine's Powers
-			});
-
-		//7: How to use Passport Strategies:
-		app.route('/login')
-			.post(passport.authenticate('local', {
-				failureRedirect: '/' //Redirects back to the signup page if there's an error.
-			}), (req, res) => {
-				res.redirect('/profile');
-			});
-
-		app.route('/profile')
-			.get(ensureAuthenticated, (req, res) => { //#8: Create New Middleware.
-				res.render(process.cwd() + '/views/pug/profile');
-			});
+		//#13: Clean up your Project with Modules:
+		auth(app, db);
+		routes(app, db);
 
 		app.listen(process.env.PORT || 3000, () => {
 			console.log("Listening on port " + process.env.PORT);
